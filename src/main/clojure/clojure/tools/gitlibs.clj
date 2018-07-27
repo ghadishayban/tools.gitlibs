@@ -51,14 +51,8 @@
   or nil if no such relationship can be established."
   [url revs]
   (when (seq revs)
-    (let [walk (RevWalk. (-> url impl/ensure-git-dir impl/git-repo))]
-      (try
-        (let [shas (map (partial resolve url) revs)]
-          (if (not-empty (filter nil? shas))
-            nil ;; can't resolve all shas in this repo
-            (let [commits (map #(.lookupCommit walk (ObjectId/fromString ^String %)) shas)
-                  ^RevCommit ret (first (sort (partial impl/commit-comparator walk) commits))]
-              (.. ret getId name))))
-        (catch MissingObjectException e nil)
-        (catch clojure.lang.ExceptionInfo e nil)
-        (finally (.dispose walk))))))
+    (let [git-dir (impl/ensure-git-dir url)
+          shas (map (partial impl/git-rev-parse git-dir) revs)]
+      (if (not-empty (filter nil? shas))
+        nil ;; can't resolve all shas in this repo
+        (first (sort (partial impl/commit-comparator git-dir) shas))))))

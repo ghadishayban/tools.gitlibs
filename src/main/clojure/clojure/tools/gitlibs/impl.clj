@@ -103,18 +103,29 @@
 
 (defn git-rev-parse
   [git-dir rev]
-  (let [p (runproc "git"
-                   "--git-dir" git-dir
-                   "rev-parse" rev)]
+  (let [p (runproc "git" "--git-dir" git-dir "rev-parse" rev)]
     (when (zero? (:exit p))
-      (:out p))))
+      (str/trimr (:out p)))))
+
+;; git merge-base --is-ancestor <maybe-ancestor-commit> <descendant-commit> 
+(defn- ancestor?
+  [git-dir x y]
+  (let [args  ["git" "--git-dir" git-dir "merge-base" "--is-ancestor" x y]
+        proc (.start (ProcessBuilder. ^java.util.List args))
+        code (.waitFor proc)]
+    (when-not (#{0 1} code)
+      (throw (ex-info "" {})))
+    (condp = code
+      0 true
+      1 false
+      (throw (Exception. "")))))
 
 (defn commit-comparator
-  [^RevWalk walk ^RevCommit x ^RevCommit y]
+  [git-dir x y]
   (cond
     (= x y) 0
-    (.isMergedInto walk x y) 1
-    (.isMergedInto walk y x) -1
+    (ancestor? git-dir x y) 1
+    (ancestor? git-dir y x) -1
     :else (throw (ex-info "" {}))))
 
 (defn match-exact
