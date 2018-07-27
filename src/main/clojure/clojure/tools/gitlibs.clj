@@ -30,13 +30,7 @@
   "Takes a git url and a rev, and returns the full commit sha. rev may be a
   partial sha, full sha, or tag name."
   [url rev]
-  (let [git-dir (impl/ensure-git-dir url)]
-    (if (ObjectId/isId rev)
-      rev
-      (let [rev (.resolve (impl/git-repo git-dir) rev)]
-        (if rev
-          (.getName rev)
-          nil)))))
+  (impl/git-rev-parse (impl/ensure-git-dir url) rev))
 
 (defn procure
   "Procure a working tree at rev for the git url representing the library lib,

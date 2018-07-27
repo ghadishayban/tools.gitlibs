@@ -24,30 +24,22 @@
   (binding [*out* *err*]
     (apply println msgs)))
 
-(def ^:private ^TransportConfigCallback ssh-callback
-  (delay
-    (let [factory (doto (ConnectorFactory/getDefault) (.setPreferredUSocketFactories "jna,nc"))
-          connector (.createConnector factory)]
-      (JSch/setConfig "PreferredAuthentications" "publickey")
-      (reify TransportConfigCallback
-        (configure [_ transport]
-          (.setSshSessionFactory ^SshTransport transport
-            (proxy [JschConfigSessionFactory] []
-              (configure [host session])
-              (getJSch [hc fs]
-                (doto (proxy-super getJSch hc fs)
-                  (.setIdentityRepository (RemoteIdentityRepository. connector)))))))))))
+(defn- runproc
+  [& args]
+  (let [proc (.start (ProcessBuilder. ^java.util.List args))
+        code (.waitFor proc)
+        out (slurp (.getInputStream proc))
+        err (slurp (.getErrorStream proc))]
+    (when-not (zero? code)
+      (printerrln args)
+      (printerrln err))
+    {:exit code
+     :out out
+     :err err}))
 
-(defn- call-with-auth
-  ([^GitCommand command]
-    (call-with-auth
-      (.. command getRepository getConfig (getString "remote" "origin" "url"))
-      command))
-  ([^String url ^GitCommand command]
-   (if (and (instance? TransportCommand command)
-         (not (str/starts-with? url "http")))
-     (.. ^TransportCommand command (setTransportConfigCallback @ssh-callback) call)
-     (.call command))))
+;; git clone --bare --quiet URL PATH
+;; git --git-dir <> fetch
+;; git --git-dir <> --work-tree <dst> checkout <rev>
 
 (defn git-repo
   (^Repository [git-dir]
@@ -59,20 +51,14 @@
        (.setWorkTree (jio/file rev-dir))))))
 
 (defn git-fetch
-  ^Git [git-dir]
-  (let [git (Git. (git-repo git-dir))]
-    (call-with-auth (.. git fetch))
-    git))
+  [^File git-dir]
+  (runproc "git" "--git-dir" (.getCanonicalPath git-dir) "fetch"))
 
 ;; TODO: restrict clone to an optional refspec?
 (defn git-clone-bare
-  [url git-dir]
+  [url ^File git-dir]
   (printerrln "Cloning:" url)
-  (call-with-auth url
-    (.. (Git/cloneRepository) (setURI url) (setGitDir (jio/file git-dir))
-      (setBare true)
-      (setNoCheckout true)
-      (setCloneAllBranches true)))
+  (runproc "git" "clone" "--bare" url (.getCanonicalPath git-dir))
   git-dir)
 
 (def ^:private CACHE
@@ -102,19 +88,26 @@
   [url]
   (let [git-dir (jio/file (cache-dir) "_repos" (clean-url url))]
     (if (.exists git-dir)
-      (try
-        (git-fetch git-dir)
-        (catch Throwable _
-          ;; if can't fetch, local cache may be corrupt, try recloning
-          (git-clone-bare url git-dir)))
+      (git-fetch git-dir)
       (git-clone-bare url git-dir))
     (.getCanonicalPath git-dir)))
 
 (defn git-checkout
-  [url rev-dir ^String rev]
-  (let [git-dir (ensure-git-dir url)
-        git (Git. (git-repo git-dir rev-dir))]
-    (call-with-auth (.. git checkout (setStartPoint rev) (setAllPaths true)))))
+  [url ^File rev-dir ^String rev]
+  (when-not (.exists rev-dir)
+    (.mkdirs rev-dir))
+  (runproc "git"
+           "--git-dir" (ensure-git-dir url)
+           "--work-tree" (.getCanonicalPath rev-dir)
+           "checkout" rev))
+
+(defn git-rev-parse
+  [git-dir rev]
+  (let [p (runproc "git"
+                   "--git-dir" git-dir
+                   "rev-parse" rev)]
+    (when (zero? (:exit p))
+      (:out p))))
 
 (defn commit-comparator
   [^RevWalk walk ^RevCommit x ^RevCommit y]
