@@ -12,13 +12,7 @@
     [clojure.java.io :as jio]
     [clojure.string :as str])
   (:import
-    [java.io File FilenameFilter IOException]
-    [org.eclipse.jgit.api Git GitCommand TransportCommand TransportConfigCallback]
-    [org.eclipse.jgit.lib Repository RepositoryBuilder]
-    [org.eclipse.jgit.revwalk RevWalk RevCommit]
-    [org.eclipse.jgit.transport SshTransport JschConfigSessionFactory]
-    [com.jcraft.jsch JSch]
-    [com.jcraft.jsch.agentproxy Connector ConnectorFactory RemoteIdentityRepository]))
+    [java.io File FilenameFilter IOException]))
 
 (defn printerrln [& msgs]
   (binding [*out* *err*]
@@ -40,15 +34,6 @@
 ;; git clone --bare --quiet URL PATH
 ;; git --git-dir <> fetch
 ;; git --git-dir <> --work-tree <dst> checkout <rev>
-
-(defn git-repo
-  (^Repository [git-dir]
-   (.build (.setGitDir (RepositoryBuilder.) (jio/file git-dir))))
-  (^Repository [git-dir rev-dir]
-   (.build
-     (doto (RepositoryBuilder.)
-       (.setGitDir (jio/file git-dir))
-       (.setWorkTree (jio/file rev-dir))))))
 
 (defn git-fetch
   [^File git-dir]

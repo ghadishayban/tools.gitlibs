@@ -14,11 +14,7 @@
   (:refer-clojure :exclude [resolve])
   (:require
     [clojure.java.io :as jio]
-    [clojure.tools.gitlibs.impl :as impl])
-  (:import
-    [org.eclipse.jgit.lib ObjectId]
-    [org.eclipse.jgit.revwalk RevWalk RevCommit]
-    [org.eclipse.jgit.errors MissingObjectException]))
+    [clojure.tools.gitlibs.impl :as impl]))
 
 (defn cache-dir
   "Return the root gitlibs cache directory. By default ~/.gitlibs or
