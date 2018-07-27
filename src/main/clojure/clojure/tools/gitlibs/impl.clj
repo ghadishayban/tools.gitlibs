@@ -31,7 +31,7 @@
         out (slurp (.getInputStream proc))
         err (slurp (.getErrorStream proc))]
     (when-not (zero? code)
-      (printerrln args)
+      (apply printerrln args)
       (printerrln err))
     {:exit code
      :out out
